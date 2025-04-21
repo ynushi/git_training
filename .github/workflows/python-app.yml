@@ -1,0 +1,71 @@
+name: Python CI/CD to S3
+
+# ワークフローのトリガー設定
+on:
+  push:
+    branches: [ main ] # mainブランチにpushされた時に実行
+  pull_request:
+    branches: [ main ] # mainブランチへのプルリクエスト作成/更新時にも実行 (主にCI目的)
+
+# ワークフローを構成するジョブ
+jobs:
+  # 1. CIジョブ: テストを実行する
+  test:
+    name: Run Tests (CI)
+    runs-on: ubuntu-latest # 実行環境
+
+    steps:
+      # ステップ1: リポジトリのコードをチェックアウト
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ステップ2: Python環境をセットアップ
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # 使用するPythonバージョンを指定
+
+      # ステップ3: 依存関係をインストール
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # ステップ4: pytestでテストを実行
+      - name: Test with pytest
+        run: pytest
+
+  # 2. CDジョブ: AWS S3にデプロイする
+  deploy:
+    name: Deploy to AWS S3 (CD)
+    needs: test # testジョブが成功した場合のみ実行
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # mainブランチへのpush時のみ実行
+    runs-on: ubuntu-latest # 実行環境
+
+    # パーミッション設定 (aws-actions/configure-aws-credentials v4以降で推奨)
+    permissions:
+      id-token: write # OpenID Connect (OIDC)認証を使う場合に必要
+      contents: read # actions/checkoutのために必要
+
+    steps:
+      # ステップ1: リポジトリのコードをチェックアウト (デプロイ対象ファイルを取得)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ステップ2: AWS認証情報を設定 (GitHub Secretsを使用)
+      # 事前にGitHubリポジトリの Settings > Secrets and variables > Actions で以下のSecretを作成しておくこと:
+      # - AWS_ACCESS_KEY_ID
+      # - AWS_SECRET_ACCESS_KEY
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1 # S3バケットがあるAWSリージョン (例: 東京リージョン)
+
+      # ステップ3: AWS S3バケットにファイルをデプロイ
+      # 例2: 'dist' ディレクトリの中身全体を S3バケットのルートに同期する場合 (既存ファイル削除オプション付き)
+      - name: Deploy directory to S3
+        run: |
+          aws s3 sync ./src s3://cicd-test-20250421 --delete
+          echo "Successfully synced ./src directory to s3://cicd-test-20250421/"
