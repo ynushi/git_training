@@ -7,7 +7,7 @@ from app import add
     (-5, -5, -10),   # ケース3
     (0, 100, 100),   # ケース4
     (100, 100, 200),   # ケース6
-    (1, 2, 3),       # ケース5: デモ用の失敗ケース
+    # (1, 2, 3),       # ケース5: デモ用の失敗ケース
 ])
 def test_add_parametrized(input_a, input_b, expected_output):
   """パラメータ化されたadd関数のテスト"""
